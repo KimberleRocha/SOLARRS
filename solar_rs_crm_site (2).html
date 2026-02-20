@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRM Solar RS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<div id="loginScreen" class="flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-2xl shadow w-96">
+    <h2 class="text-2xl font-bold mb-6 text-center">CRM Solar RS</h2>
+    <input id="loginUser" type="text" placeholder="Usuário" class="w-full border p-2 rounded mb-3" />
+    <input id="loginPass" type="password" placeholder="Senha" class="w-full border p-2 rounded mb-4" />
+    <button onclick="login()" class="bg-blue-600 text-white w-full py-2 rounded-xl">Entrar</button>
+    <p id="loginError" class="text-red-500 text-sm mt-3 text-center"></p>
+  </div>
+</div>
+
+<div id="app" class="hidden max-w-7xl mx-auto p-6">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">CRM Comercial - Solar RS</h1>
+    <div class="space-x-2">
+      <button onclick="logout()" class="bg-gray-500 text-white px-4 py-2 rounded-xl">Sair</button>
+      <button id="btnSeller" onclick="openSellerModal()" class="bg-blue-600 text-white px-4 py-2 rounded-xl hidden">Novo Vendedor</button>
+      <button onclick="openClientModal()" class="bg-green-600 text-white px-4 py-2 rounded-xl">Novo Cliente</button>
+    </div>
+  </div>
+
+  <div class="bg-white p-4 rounded-xl shadow mb-6">
+    <h2 class="text-lg font-semibold">Total Fechado</h2>
+    <p id="totalSales" class="text-2xl font-bold">R$ 0</p>
+  </div>
+
+  <div id="pipeline" class="grid md:grid-cols-5 gap-4"></div>
+</div>
+
+<!-- Modal Vendedor (Admin) -->
+<div id="sellerModal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+  <div class="bg-white p-6 rounded-xl w-96">
+    <h2 class="text-xl font-bold mb-4">Novo Vendedor</h2>
+    <input id="sellerName" type="text" placeholder="Nome" class="w-full border p-2 rounded mb-2" />
+    <input id="sellerUser" type="text" placeholder="Usuário" class="w-full border p-2 rounded mb-2" />
+    <input id="sellerPass" type="password" placeholder="Senha" class="w-full border p-2 rounded mb-4" />
+    <button onclick="addSeller()" class="bg-blue-600 text-white w-full py-2 rounded-xl">Salvar</button>
+  </div>
+</div>
+
+<!-- Modal Cliente -->
+<div id="clientModal" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+  <div class="bg-white p-6 rounded-xl w-96">
+    <h2 class="text-xl font-bold mb-4">Novo Cliente</h2>
+    <input id="clientName" type="text" placeholder="Nome" class="w-full border p-2 rounded mb-2" />
+    <input id="clientCompany" type="text" placeholder="Empresa" class="w-full border p-2 rounded mb-2" />
+    <input id="clientValue" type="number" placeholder="Valor" class="w-full border p-2 rounded mb-2" />
+    <select id="clientSeller" class="w-full border p-2 rounded mb-4"></select>
+    <button onclick="addClient()" class="bg-green-600 text-white w-full py-2 rounded-xl">Salvar</button>
+  </div>
+</div>
+
+<script>
+const stages = ["Lead","Contato","Proposta","Negociação","Fechado"];
+
+let users = JSON.parse(localStorage.getItem("users")) || [
+  {name:"Administrador", username:"Gerencia", password:"rr140608", role:"admin"},
+  {name:"Eberton Larentis", username:"Eberton Larentis", password:"el070801", role:"seller"},
+  {name:"Guilherme Fochi", username:"Guilherme Fochi", password:"gf190897", role:"seller"},
+  {name:"Cezar Augusto dos Santos", username:"Cezar Augusto dos Santos", password:"cas180596", role:"seller"}
+];
+
+let clients = JSON.parse(localStorage.getItem("clients")) || [];
+let currentUser = null;
+
+function saveData(){
+  localStorage.setItem("users",JSON.stringify(users));
+  localStorage.setItem("clients",JSON.stringify(clients));
+}
+
+function login(){
+  const user = document.getElementById("loginUser").value;
+  const pass = document.getElementById("loginPass").value;
+  const found = users.find(u=>u.username===user && u.password===pass);
+  if(!found){
+    document.getElementById("loginError").innerText="Usuário ou senha inválidos";
+    return;
+  }
+  currentUser = found;
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  if(found.role==="admin"){
+    document.getElementById("btnSeller").classList.remove("hidden");
+  }
+  renderPipeline();
+}
+
+function logout(){
+  location.reload();
+}
+
+function renderPipeline(){
+  const pipeline=document.getElementById("pipeline");
+  pipeline.innerHTML="";
+
+  stages.forEach(stage=>{
+    const column=document.createElement("div");
+    column.className="bg-white p-4 rounded-xl shadow";
+    column.innerHTML=`<h3 class='font-semibold mb-4'>${stage}</h3>`;
+
+    clients
+      .filter(c=>c.stage===stage)
+      .filter(c=>currentUser.role==="admin" || c.seller===currentUser.username)
+      .forEach(client=>{
+        const card=document.createElement("div");
+        card.className="bg-gray-100 p-3 rounded-lg mb-2";
+        card.innerHTML=`
+          <strong>${client.name}</strong><br>
+          <small>${client.company}</small><br>
+          R$ ${client.value}<br>
+          <small>Vendedor: ${client.seller}</small>
+        `;
+
+        const select=document.createElement("select");
+        select.className="mt-2 w-full border rounded p-1";
+        stages.forEach(s=>{
+          const opt=document.createElement("option");
+          opt.value=s;
+          opt.text=s;
+          if(s===client.stage) opt.selected=true;
+          select.appendChild(opt);
+        });
+        select.onchange=()=>{
+          client.stage=select.value;
+          saveData();
+          renderPipeline();
+        };
+        card.appendChild(select);
+        column.appendChild(card);
+      });
+
+    pipeline.appendChild(column);
+  });
+  updateTotal();
+}
+
+function updateTotal(){
+  const total=clients
+    .filter(c=>c.stage==="Fechado")
+    .filter(c=>currentUser.role==="admin" || c.seller===currentUser.username)
+    .reduce((sum,c)=>sum+Number(c.value),0);
+  document.getElementById("totalSales").innerText="R$ "+total.toLocaleString("pt-BR");
+}
+
+function openSellerModal(){
+  document.getElementById("sellerModal").classList.remove("hidden");
+}
+
+function openClientModal(){
+  const select=document.getElementById("clientSeller");
+  select.innerHTML="";
+  users.filter(u=>u.role==="seller").forEach(u=>{
+    const opt=document.createElement("option");
+    opt.value=u.username;
+    opt.text=u.name;
+    select.appendChild(opt);
+  });
+  document.getElementById("clientModal").classList.remove("hidden");
+}
+
+function addSeller(){
+  const name=document.getElementById("sellerName").value;
+  const username=document.getElementById("sellerUser").value;
+  const password=document.getElementById("sellerPass").value;
+  if(!name||!username||!password) return;
+  users.push({name,username,password,role:"seller"});
+  saveData();
+  document.getElementById("sellerModal").classList.add("hidden");
+}
+
+function addClient(){
+  const name=document.getElementById("clientName").value;
+  const company=document.getElementById("clientCompany").value;
+  const value=document.getElementById("clientValue").value;
+  const seller=document.getElementById("clientSeller").value;
+  if(!name||!seller) return;
+  clients.push({name,company,value,seller,stage:"Lead"});
+  saveData();
+  document.getElementById("clientModal").classList.add("hidden");
+  renderPipeline();
+}
+</script>
+
+</body>
+</html>
